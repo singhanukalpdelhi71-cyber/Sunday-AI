@@ -58,10 +58,12 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         tts = TextToSpeech(this, this)
 
         setContent {
-            SundayScreen(
+                        SundayScreen(
                 onSpeak = { speak(it) },
                 onListen = { startListening() },
-                onOpenApp = { openApp(it) }
+                onOpenApp = { openApp(it) },
+                onStartWakeWord = { startWakeWordService() },
+                onStopWakeWord = { stopWakeWordService() }
             )
         }
     }
