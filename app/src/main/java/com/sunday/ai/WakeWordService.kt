@@ -6,11 +6,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.content.pm.ServiceInfo
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -25,7 +26,7 @@ class WakeWordService : Service() {
     private var speechRecognizer: SpeechRecognizer? = null
     private val handler = Handler(Looper.getMainLooper())
     private var isListening = false
-    private var wakeWordDetected = false
+    private var isStopping = false
 
     override fun onCreate() {
         super.onCreate()
@@ -37,8 +38,10 @@ class WakeWordService : Service() {
         flags: Int,
         startId: Int
     ): Int {
+        isStopping = false
+
         val notification = buildNotification(
-            "Starting speech recognition..."
+            "Preparing speech recognition..."
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -51,14 +54,17 @@ class WakeWordService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
-        startRecognition()
+        if (speechRecognizer == null) {
+            startRecognition()
+        }
+
         return START_NOT_STICKY
     }
 
     private fun startRecognition() {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             updateNotification(
-                "Speech recognition isn't available on this phone"
+                "Speech recognition unavailable on this phone"
             )
             stopSelf()
             return
@@ -71,14 +77,14 @@ class WakeWordService : Service() {
             speechRecognizer?.setRecognitionListener(
                 object : RecognitionListener {
 
-                    override fun onReadyForSpeech(params: android.os.Bundle?) {
+                    override fun onReadyForSpeech(params: Bundle?) {
                         isListening = true
-                        if (!wakeWordDetected) {
-                            updateNotification("Listening for Hey Sunday...")
-                        }
+                        updateNotification("Listening for Hey Sunday...")
                     }
 
-                    override fun onBeginningOfSpeech() {}
+                    override fun onBeginningOfSpeech() {
+                        updateNotification("Speech detected; listening...")
+                    }
 
                     override fun onRmsChanged(rmsdB: Float) {}
 
@@ -86,14 +92,38 @@ class WakeWordService : Service() {
 
                     override fun onEndOfSpeech() {
                         isListening = false
+                        updateNotification("Processing speech...")
                     }
 
                     override fun onError(error: Int) {
                         isListening = false
+
+                        val message = when (error) {
+                            SpeechRecognizer.ERROR_AUDIO ->
+                                "Audio recording error"
+                            SpeechRecognizer.ERROR_CLIENT ->
+                                "Recognizer client error"
+                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
+                                "Microphone permission missing"
+                            SpeechRecognizer.ERROR_NETWORK ->
+                                "Speech recognition network error"
+                            SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
+                                "Speech recognition network timeout"
+                            SpeechRecognizer.ERROR_NO_MATCH ->
+                                "No speech recognized; retrying..."
+                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY ->
+                                "Recognizer busy; retrying..."
+                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
+                                "No speech detected; retrying..."
+                            else ->
+                                "Speech recognition error: $error"
+                        }
+
+                        updateNotification(message)
                         scheduleRestart()
                     }
 
-                    override fun onResults(results: android.os.Bundle?) {
+                    override fun onResults(results: Bundle?) {
                         isListening = false
 
                         val matches = results?.getStringArrayList(
@@ -101,20 +131,21 @@ class WakeWordService : Service() {
                         )
 
                         val phrase = matches?.firstOrNull().orEmpty()
-                            .lowercase()
+                        val normalized = phrase.lowercase().trim()
 
                         if (
-                            phrase.contains("hey sunday") ||
-                            phrase == "sunday" ||
-                            phrase.startsWith("sunday ")
+                            normalized.contains("hey sunday") ||
+                            normalized == "sunday" ||
+                            normalized.startsWith("sunday ")
                         ) {
-                            wakeWordDetected = true
                             updateNotification(
-                                "Hey Sunday detected: $phrase"
+                                "Wake word detected: $phrase"
                             )
-                        } else if (!wakeWordDetected) {
+                        } else {
                             updateNotification(
-                                "Heard: ${phrase.ifBlank { "no speech detected" }}"
+                                "Heard: ${
+                                    phrase.ifBlank { "no speech result" }
+                                }"
                             )
                         }
 
@@ -122,25 +153,36 @@ class WakeWordService : Service() {
                     }
 
                     override fun onPartialResults(
-                        partialResults: android.os.Bundle?
-                    ) {}
+                        partialResults: Bundle?
+                    ) {
+                        val matches = partialResults?.getStringArrayList(
+                            SpeechRecognizer.RESULTS_RECOGNITION
+                        )
+
+                        val phrase = matches?.firstOrNull().orEmpty()
+
+                        if (phrase.isNotBlank()) {
+                            updateNotification("Hearing: $phrase")
+                        }
+                    }
 
                     override fun onEvent(
                         eventType: Int,
-                        params: android.os.Bundle?
+                        params: Bundle?
                     ) {}
                 }
             )
 
             listenAgain()
+
         } catch (_: Exception) {
-            updateNotification("Couldn't start speech recognition")
+            updateNotification("Couldn't initialize speech recognition")
             stopSelf()
         }
     }
 
     private fun listenAgain() {
-        if (isListening) return
+        if (isStopping || isListening) return
 
         try {
             val intent = Intent(
@@ -161,20 +203,25 @@ class WakeWordService : Service() {
             }
 
             speechRecognizer?.startListening(intent)
-            isListening = true
+
         } catch (_: Exception) {
+            isListening = false
+            updateNotification("Couldn't start listening; retrying...")
             scheduleRestart()
         }
     }
 
     private fun scheduleRestart() {
         handler.removeCallbacksAndMessages(null)
+
+        if (isStopping) return
+
         handler.postDelayed({
-            if (speechRecognizer != null) {
+            if (!isStopping && speechRecognizer != null) {
                 isListening = false
                 listenAgain()
             }
-        }, 1000)
+        }, 1500)
     }
 
     private fun buildNotification(message: String): Notification {
@@ -212,10 +259,13 @@ class WakeWordService : Service() {
     }
 
     override fun onDestroy() {
+        isStopping = true
         handler.removeCallbacksAndMessages(null)
+
         speechRecognizer?.destroy()
         speechRecognizer = null
         isListening = false
+
         super.onDestroy()
     }
 
