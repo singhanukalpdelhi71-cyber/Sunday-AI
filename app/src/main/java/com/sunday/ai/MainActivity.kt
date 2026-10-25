@@ -210,7 +210,9 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
 private fun SundayScreen(
     onSpeak: (String) -> Unit,
     onListen: () -> Unit,
-    onOpenApp: (String) -> Boolean
+    onOpenApp: (String) -> Boolean,
+    onStartWakeWord: () -> Unit,
+    onStopWakeWord: () -> Unit
 ) {
     var message by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("SYSTEM READY") }
@@ -484,10 +486,11 @@ private fun SundayScreen(
 
             Spacer(Modifier.height(10.dp))
 
+            
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 14.dp),
+                    .padding(bottom = 8.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -505,6 +508,40 @@ private fun SundayScreen(
                     Icon(Icons.Default.Mic, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text("TALK TO SUNDAY", letterSpacing = 1.sp, fontSize = 11.sp)
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = {
+                        status = "WAKE SERVICE STARTING"
+                        onStartWakeWord()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Cyan.copy(alpha = 0.18f),
+                        contentColor = Cyan
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("START WAKE WORD", fontSize = 10.sp)
+                }
+
+                Spacer(Modifier.width(10.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        status = "WAKE SERVICE STOPPED"
+                        onStopWakeWord()
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("STOP", fontSize = 10.sp)
                 }
             }
         }
