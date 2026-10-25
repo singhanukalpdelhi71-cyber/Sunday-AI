@@ -66,6 +66,38 @@ class MainActivity : ComponentActivity(), TextToSpeech.OnInitListener {
         }
     }
 
+    private fun startWakeWordService() {
+        if (android.os.Build.VERSION.SDK_INT >= 23 &&
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                100
+            )
+            return
+        }
+
+        try {
+            val serviceIntent = Intent(this, WakeWordService::class.java)
+            androidx.core.content.ContextCompat.startForegroundService(
+                this,
+                serviceIntent
+            )
+            speak("Sunday voice service started.")
+        } catch (_: Exception) {
+            speak("I couldn't start the voice service. Please keep Sunday open and try again.")
+        }
+    }
+
+    private fun stopWakeWordService() {
+        stopService(Intent(this, WakeWordService::class.java))
+        speak("Sunday voice service stopped.")
+    }
+
+
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.language = Locale.getDefault()
