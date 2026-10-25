@@ -17,6 +17,11 @@
         <package android:name="com.google.android.apps.maps" />
     </queries>
 
+        <service
+            android:name=".WakeWordService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
     <application
         android:allowBackup="false"
         android:label="Sunday AI"
