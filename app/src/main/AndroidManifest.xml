@@ -17,11 +17,6 @@
         <package android:name="com.google.android.apps.maps" />
     </queries>
 
-        <service
-            android:name=".WakeWordService"
-            android:exported="false"
-            android:foregroundServiceType="microphone" />
-
     <application
         android:allowBackup="false"
         android:label="Sunday AI"
@@ -34,7 +29,10 @@
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+       <service
+            android:name=".WakeWordService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />               <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
         </activity>
